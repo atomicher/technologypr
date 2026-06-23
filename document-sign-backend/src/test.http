@@ -1,0 +1,57 @@
+### 1. Створити директора
+POST http://localhost:3000/auth/register
+Content-Type: application/json
+
+{
+  "email": "director@company.com",
+  "password": "password123",
+  "fullName": "Іваненко Іван Іванович",
+  "role": "director"
+}
+
+###
+
+### 2. Створити секретаря
+POST http://localhost:3000/auth/register
+Content-Type: application/json
+
+{
+  "email": "secretary@company.com",
+  "password": "password123",
+  "fullName": "Петренко Оксана Василівна",
+  "role": "secretary"
+}
+
+###
+
+### 3. Логін директора
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "email": "director@company.com",
+  "password": "password123"
+}
+
+###
+
+### 4. Мій профіль
+GET http://localhost:3000/auth/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMWFlNzg5OS05NWJiLTRlYzMtOWE3NC1hNTU1YTIwNTJmMzEiLCJlbWFpbCI6ImRpcmVjdG9yQGNvbXBhbnkuY29tIiwicm9sZSI6ImRpcmVjdG9yIiwiaWF0IjoxNzgxMDkxNDg0LCJleHAiOjE3ODExNzc4ODR9.WO9c7P2tovhHgkC_1ss-hy2UwaVQQMivaas7z9QjH28
+
+#
+
+### 7. Логін директора
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "email": "director@company.com",
+  "password": "password123"
+}
+
+###
+
+### 8. Список документів директора
+GET http://localhost:3000/documents
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMWFlNzg5OS05NWJiLTRlYzMtOWE3NC1hNTU1YTIwNTJmMzEiLCJlbWFpbCI6ImRpcmVjdG9yQGNvbXBhbnkuY29tIiwicm9sZSI6ImRpcmVjdG9yIiwiaWF0IjoxNzgxNTE5ODEzLCJleHAiOjE3ODE2MDYyMTN9.6mZdreCkMREv67T4cmF00fmZCiyvDkKnwMqRxjsx7qU
