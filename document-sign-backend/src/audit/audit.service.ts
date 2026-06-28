@@ -28,4 +28,16 @@ export class AuditService {
     });
     return this.auditRepo.save(log);
   }
+  async findAll(userId?: string, limit = 50) {
+  const qb = this.auditRepo.createQueryBuilder('log')
+    .leftJoinAndSelect('log.user', 'user')
+    .orderBy('log.createdAt', 'DESC')
+    .take(limit);
+
+  if (userId) {
+    qb.where('log.user_id = :userId', { userId });
+  }
+
+  return qb.getMany();
+}
 }

@@ -6,12 +6,14 @@ import { Document } from './entities/document.entity';
 import { DocumentRecipient } from './entities/document-recipient.entity';
 import { AuditModule } from '../audit/audit.module';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Document, DocumentRecipient]),
     AuditModule,
     UsersModule,
+    NotificationsModule,
   ],
   providers: [DocumentsService],
   controllers: [DocumentsController],

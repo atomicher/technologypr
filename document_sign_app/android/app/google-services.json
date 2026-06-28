@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "34053855560",
+    "project_id": "documentsign-6027e",
+    "storage_bucket": "documentsign-6027e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:34053855560:android:b2028f4ad01c952fbd7b7d",
+        "android_client_info": {
+          "package_name": "com.example.document_sign_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpmyVJxpOMwrXE6OwlVQp90wzDG0GjsLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

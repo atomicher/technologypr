@@ -58,15 +58,25 @@ class DocumentModel {
   String get categoryLabel {
     switch (category) {
       case 'accounting':
-        return 'Бухгалтерія';
+        return '📊 Бухгалтерія';
       case 'legal':
-        return 'Юридичні';
+        return '⚖️ Юридичні';
       case 'internal':
-        return 'Внутрішні';
+        return '🏢 Внутрішні';
       case 'financial':
-        return 'Фінансові';
+        return '💰 Фінансові';
+      case 'hr':
+        return '👥 Кадри';
+      case 'contracts':
+        return '📝 Договори';
+      case 'reports':
+        return '📈 Звіти';
+      case 'invoices':
+        return '🧾 Рахунки';
+      case 'orders':
+        return '📋 Накази';
       default:
-        return 'Інші';
+        return '📁 Інші';
     }
   }
 }

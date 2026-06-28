@@ -1,9 +1,8 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../core/api/api_client.dart';
-import '../../core/api/file_picker_service.dart';
 
 class SignDialog extends StatefulWidget {
   final String documentId;
@@ -28,69 +27,229 @@ class _SignDialogState extends State<SignDialog> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _error;
-  bool _hasKey = false;
+  List<dynamic> _keys = [];
+  String? _selectedKeyId;
+  bool _keysLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _checkKey();
+    _loadKeys();
   }
 
-  Future<void> _checkKey() async {
-    final response = await ApiClient.get('/signatures/check-key');
-    setState(() => _hasKey = response.statusCode == 200);
+  Future<void> _loadKeys() async {
+    setState(() => _keysLoading = true);
+    try {
+      final response = await ApiClient.get('/signatures/keys');
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        setState(() {
+          _keys = data;
+          final defaultKey = data.firstWhere(
+            (k) => k['isDefault'] == true,
+            orElse: () => data.isNotEmpty ? data[0] : null,
+          );
+          if (defaultKey != null) _selectedKeyId = defaultKey['id'];
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+    setState(() => _keysLoading = false);
   }
 
   Future<void> _uploadKey() async {
-    final path = await FilePickerService.pickFile();
-    if (path != null) {
-      await _sendKey(path);
-    }
-  }
-
-  Future<void> _sendKey(String filePath) async {
-    setState(() => _isLoading = true);
-    print('Uploading key from: $filePath');
     try {
+      const channel = MethodChannel('file_picker_channel');
+      final String? path = await channel.invokeMethod('pickFile');
+      if (path == null) return;
+
+      // Питаємо пароль
+      final passwordController = TextEditingController();
+      bool obscure = true;
+      String? error;
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1D4ED8).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.vpn_key_rounded,
+                    color: Color(0xFF1D4ED8),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text('Пароль до ключа'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  path.split('/').last,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Введіть пароль для перевірки та підтвердження ключа',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                StatefulBuilder(
+                  builder: (ctx2, setFieldState) => TextField(
+                    controller: passwordController,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Пароль від .p12 ключа',
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: Color(0xFF1D4ED8),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setFieldState(() => obscure = !obscure);
+                          setDialogState(() {});
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Скасувати'),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.check_rounded),
+                label: const Text('Додати ключ'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D4ED8),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () {
+                  if (passwordController.text.isEmpty) {
+                    setDialogState(() => error = 'Введіть пароль');
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      // Показуємо індикатор завантаження
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Перевірка ключа...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
       final response = await ApiClient.multipartPost(
         '/signatures/upload-key',
-        filePath,
-        {},
+        path,
+        {'password': passwordController.text},
         fieldName: 'key',
       );
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+
+      if (mounted) Navigator.pop(context);
+
       if (response.statusCode == 201) {
-        setState(() => _hasKey = true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Ключ завантажено'),
+              content: Text('✅ Ключ перевірено та додано'),
               backgroundColor: Colors.green,
             ),
           );
         }
+        _loadKeys();
       } else {
+        final data = jsonDecode(response.body);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Помилка: ${response.statusCode} ${response.body}'),
+              content: Text(data['message'] ?? 'Помилка додавання ключа'),
+              backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
-      print('Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Помилка: $e')));
       }
     }
-    setState(() => _isLoading = false);
   }
 
   Future<void> _sign() async {
+    if (_selectedKeyId == null) {
+      setState(() => _error = 'Виберіть ключ для підписання');
+      return;
+    }
     if (_passwordController.text.isEmpty) {
       setState(() => _error = 'Введіть пароль від ключа');
       return;
@@ -110,26 +269,19 @@ class _SignDialogState extends State<SignDialog> {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
+          'keyId': _selectedKeyId,
           'password': _passwordController.text,
           'pdfPath': widget.pdfPath,
         }),
       );
 
       if (response.statusCode == 201) {
-        // Також оновлюємо статус документа
-        await ApiClient.patch('/documents/${widget.documentId}/status', {
+        await ApiClient.patch('/documents/${widget.documentId}/sign', {
           'status': 'signed',
         });
-
         if (mounted) {
           Navigator.pop(context);
           widget.onSigned();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Документ підписано КЕП'),
-              backgroundColor: Colors.green,
-            ),
-          );
         }
       } else {
         final data = jsonDecode(response.body);
@@ -145,62 +297,166 @@ class _SignDialogState extends State<SignDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('КЕП Підписання'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1D4ED8).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.draw_rounded,
+              color: Color(0xFF1D4ED8),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text('КЕП Підписання'),
+        ],
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.documentTitle,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.documentTitle,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 16),
-            if (!_hasKey) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange),
+
+            // Вибір ключа
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Ключ підпису',
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-                child: const Text(
-                  '⚠️ Ключ .p12 не завантажено. Спочатку завантажте ваш ключ.',
-                  style: TextStyle(fontSize: 13),
+                TextButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Додати', style: TextStyle(fontSize: 12)),
+                  onPressed: _uploadKey,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF1D4ED8),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Завантажити .p12 ключ'),
-                  onPressed: _isLoading ? null : _uploadKey,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (_hasKey) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green),
-                ),
-                child: const Text(
-                  '✅ Ключ завантажено. Введіть пароль для підписання.',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            _keysLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _keys.isEmpty
+                ? Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          '⚠️ Немає завантажених ключів',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.upload_file, size: 16),
+                          label: const Text('Завантажити .p12'),
+                          onPressed: _uploadKey,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.orange,
+                            side: const BorderSide(color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Column(
+                    children: _keys.map((key) {
+                      final isSelected = _selectedKeyId == key['id'];
+                      final isDefault = key['isDefault'] == true;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedKeyId = key['id']),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF1D4ED8).withValues(alpha: 0.1)
+                                : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF1D4ED8)
+                                  : Colors.grey[200]!,
+                              width: isSelected ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                color: isSelected
+                                    ? const Color(0xFF1D4ED8)
+                                    : Colors.grey,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      key['keyName'] ?? '',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: isSelected
+                                            ? const Color(0xFF1D4ED8)
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                    if (isDefault)
+                                      const Text(
+                                        'За замовчуванням',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF1D4ED8),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+            const SizedBox(height: 16),
+
+            // Пароль
             TextField(
               controller: _passwordController,
               obscureText: _obscurePassword,
               decoration: InputDecoration(
-                labelText: 'Пароль від .p12 ключа',
-                border: const OutlineInputBorder(),
+                labelText: 'Пароль від ключа',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -215,7 +471,17 @@ class _SignDialogState extends State<SignDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ),
             ],
           ],
         ),
@@ -235,13 +501,16 @@ class _SignDialogState extends State<SignDialog> {
                     color: Colors.white,
                   ),
                 )
-              : const Icon(Icons.draw),
-          label: const Text('Підписати КЕП'),
+              : const Icon(Icons.draw_rounded),
+          label: const Text('Підписати'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1976D2),
+            backgroundColor: const Color(0xFF1D4ED8),
             foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
-          onPressed: (_isLoading || !_hasKey) ? null : _sign,
+          onPressed: (_isLoading || _keys.isEmpty) ? null : _sign,
         ),
       ],
     );

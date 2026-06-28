@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
-import '../../core/providers/auth_provider.dart';
-import '../auth/register_screen.dart';
+import 'create_user_screen.dart';
+import 'edit_user_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -14,31 +13,58 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   List<dynamic> _users = [];
+  List<dynamic> _filtered = [];
   bool _isLoading = true;
+  String _searchQuery = '';
+  String _selectedDepartment = 'all';
+  List<String> _departments = ['all'];
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    _load();
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _load() async {
     setState(() => _isLoading = true);
     try {
       final response = await ApiClient.get('/users');
       if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        final deps = <String>{'all'};
+        for (final u in data) {
+          if (u['department'] != null &&
+              u['department'].toString().isNotEmpty) {
+            deps.add(u['department'] as String);
+          }
+        }
         setState(() {
-          _users = jsonDecode(response.body);
+          _users = data;
+          _departments = deps.toList();
+          _applyFilter();
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Помилка завантаження списку')),
-        );
-      }
+      // ignore
     }
     setState(() => _isLoading = false);
+  }
+
+  void _applyFilter() {
+    _filtered = _users.where((u) {
+      final matchDept =
+          _selectedDepartment == 'all' ||
+          u['department'] == _selectedDepartment;
+      final matchSearch =
+          _searchQuery.isEmpty ||
+          (u['fullName'] as String? ?? '').toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          ) ||
+          (u['email'] as String? ?? '').toLowerCase().contains(
+            _searchQuery.toLowerCase(),
+          );
+      return matchDept && matchSearch;
+    }).toList();
   }
 
   Future<void> _deleteUser(String id, String name) async {
@@ -46,238 +72,365 @@ class _AdminScreenState extends State<AdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Видалення'),
-          ],
-        ),
-        content: Text(
-          'Ви впевнені, що хочете видалити користувача "$name"?\nЦю дію неможливо скасувати.',
-        ),
+        title: const Text('Видалити користувача?'),
+        content: Text('Ви впевнені що хочете деактивувати "$name"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Скасувати',
-              style: TextStyle(color: Colors.grey),
-            ),
+            child: const Text('Скасувати'),
           ),
           ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Видалити'),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
-
-    try {
+    if (confirm == true) {
       final response = await ApiClient.delete('/users/$id');
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        _loadUsers(); // Оновлюємо список
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Користувача видалено'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Помилка видалення')));
+      if (response.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Користувача деактивовано'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _load();
       }
     }
   }
 
-  // Допоміжний метод для красивого бейджика ролі
-  Widget _buildRoleBadge(String role) {
-    Color color;
-    String label;
-    IconData icon;
-
+  Color _roleColor(String? role) {
     switch (role) {
       case 'admin':
-        color = Colors.purple;
-        label = 'Адмін';
-        icon = Icons.security;
-        break;
-      case 'director':
-        color = const Color(0xFF1D4ED8);
-        label = 'Директор';
-        icon = Icons.business_center;
-        break;
+        return Colors.purple;
+      case 'employee':
+        return const Color(0xFF1D4ED8);
       default:
-        color = Colors.teal;
-        label = 'Секретар';
-        icon = Icons.admin_panel_settings;
+        return Colors.grey;
     }
+  }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _roleLabel(String? role) {
+    switch (role) {
+      case 'admin':
+        return 'Адмін';
+      case 'employee':
+        return 'Співробітник';
+      default:
+        return role ?? '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final currentUserId = auth.user?.id;
+    final byDept = <String, List<dynamic>>{};
+    for (final u in _filtered) {
+      final dept = u['department'] as String? ?? 'Без відділу';
+      byDept.putIfAbsent(dept, () => []).add(u);
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text(
-          'Керування співробітниками',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
-        ),
+        title: const Text('Адмін панель'),
         backgroundColor: const Color(0xFF1D4ED8),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () async {
-              await context.read<AuthProvider>().logout();
-              if (context.mounted) Navigator.pushReplacementNamed(context, '/');
-            },
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Статистика
+          Container(
+            color: const Color(0xFF1D4ED8),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                _statCard('Всього', _users.length.toString()),
+                const SizedBox(width: 8),
+                _statCard('Відділів', (_departments.length - 1).toString()),
+                const SizedBox(width: 8),
+                _statCard(
+                  'Адмінів',
+                  _users.where((u) => u['role'] == 'admin').length.toString(),
+                ),
+              ],
+            ),
+          ),
+          // Пошук і фільтр
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Пошук за іменем або email...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _applyFilter();
+                  }),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _departments.map((dept) {
+                      final isSelected = _selectedDepartment == dept;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(dept == 'all' ? 'Всі відділи' : dept),
+                          selected: isSelected,
+                          onSelected: (_) => setState(() {
+                            _selectedDepartment = dept;
+                            _applyFilter();
+                          }),
+                          selectedColor: const Color(0xFF1D4ED8),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : Colors.black,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Список
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Немає користувачів',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                    children: byDept.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1D4ED8),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  entry.key,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '(${entry.value.length})',
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ...entry.value.map((user) => _buildUserCard(user)),
+                        ],
+                      );
+                    }).toList(),
+                  ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF1D4ED8)),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadUsers,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _users.length,
-                itemBuilder: (context, index) {
-                  final user = _users[index];
-                  final isMe = user['id'] == currentUserId;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: const Color(
-                          0xFF1D4ED8,
-                        ).withValues(alpha: 0.1),
-                        child: Text(
-                          user['fullName']
-                                  ?.toString()
-                                  .substring(0, 1)
-                                  .toUpperCase() ??
-                              '?',
-                          style: const TextStyle(
-                            color: Color(0xFF1D4ED8),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        isMe
-                            ? '${user['fullName']} (Ви)'
-                            : user['fullName'] ?? 'Невідомо',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            user['email'] ?? '',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _buildRoleBadge(user['role'] ?? 'secretary'),
-                        ],
-                      ),
-                      trailing: isMe
-                          ? const SizedBox.shrink() // Адмін не може видалити сам себе
-                          : IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline_rounded,
-                                color: Colors.red,
-                              ),
-                              onPressed: () =>
-                                  _deleteUser(user['id'], user['fullName']),
-                            ),
-                    ),
-                  );
-                },
-              ),
-            ),
-      // Плаваюча кнопка для додавання нового співробітника
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const RegisterScreen()),
+            MaterialPageRoute(builder: (_) => const CreateUserScreen()),
           );
-          _loadUsers(); // Оновлюємо список після повернення з екрану реєстрації
+          _load();
         },
-        backgroundColor: const Color(0xFF10B981),
-        icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+        backgroundColor: const Color(0xFF1D4ED8),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add_rounded),
         label: const Text(
-          'Додати',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          'Додати користувача',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserCard(dynamic user) {
+    final role = user['role'] as String? ?? '';
+    final roleColor = _roleColor(role);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: roleColor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              (user['fullName'] as String? ?? 'U')[0].toUpperCase(),
+              style: TextStyle(
+                color: roleColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ),
+        ),
+        title: Text(
+          user['fullName'] as String? ?? '',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              user['email'] as String? ?? '',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+            if (user['position'] != null)
+              Text(
+                user['position'] as String,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: roleColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _roleLabel(role),
+                style: TextStyle(
+                  color: roleColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        trailing: PopupMenuButton(
+          icon: const Icon(Icons.more_vert),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Редагувати'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                  SizedBox(width: 8),
+                  Text('Видалити', style: TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
+          ],
+          onSelected: (value) async {
+            if (value == 'edit') {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => EditUserScreen(user: user)),
+              );
+              _load();
+            } else if (value == 'delete') {
+              await _deleteUser(
+                user['id'] as String,
+                user['fullName'] as String? ?? '',
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _statCard(String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
+          ],
         ),
       ),
     );

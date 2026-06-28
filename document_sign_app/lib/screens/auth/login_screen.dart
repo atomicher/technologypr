@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/theme/app_theme.dart';
+import 'change_password_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,24 +25,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    FocusScope.of(context).unfocus();
     final auth = context.read<AuthProvider>();
     final success = await auth.login(
       _emailController.text.trim(),
       _passwordController.text,
     );
-
     if (success && mounted) {
-      // РОУТИНГ ЗАЛЕЖНО ВІД РОЛІ
-      final role = auth
-          .user!
-          .role; // або auth.user!.role.toLowerCase() якщо є нюанси з регістром
-
-      if (role == 'admin') {
-        Navigator.pushReplacementNamed(context, '/admin');
-      } else if (role == 'director') {
-        Navigator.pushReplacementNamed(context, '/director');
+      if (auth.user?.mustChangePassword == true) {
+        Navigator.pushReplacementNamed(context, '/change-password');
       } else {
-        Navigator.pushReplacementNamed(context, '/secretary');
+        Navigator.pushReplacementNamed(context, '/home');
       }
     }
   }
@@ -93,7 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                   const SizedBox(height: 40),
-
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -130,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
+                          onChanged: (_) => auth.clearError(),
                           decoration: InputDecoration(
                             labelText: 'Email адреса',
                             prefixIcon: const Icon(
@@ -145,6 +140,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
+                          onChanged: (_) => auth.clearError(),
+                          onSubmitted: (_) => _login(),
                           decoration: InputDecoration(
                             labelText: 'Пароль',
                             prefixIcon: const Icon(
@@ -166,22 +163,29 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          onSubmitted: (_) => _login(),
                         ),
+                        // Помилка входу
                         if (auth.error != null) ...[
                           const SizedBox(height: 12),
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppTheme.errorColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppTheme.errorColor.withValues(
+                                alpha: 0.08,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppTheme.errorColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
                             ),
                             child: Row(
                               children: [
                                 const Icon(
                                   Icons.error_outline,
                                   color: AppTheme.errorColor,
-                                  size: 16,
+                                  size: 18,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(

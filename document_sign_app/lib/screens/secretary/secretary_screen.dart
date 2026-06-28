@@ -572,7 +572,7 @@ class _SecretaryScreenState extends State<SecretaryScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 160,
+            expandedHeight: 210,
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF1976D2),

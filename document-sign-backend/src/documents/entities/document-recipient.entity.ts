@@ -6,6 +6,7 @@ import { Document } from './document.entity';
 import { User } from '../../users/entities/user.entity';
 
 export enum RecipientStatus {
+  WAITING  = 'waiting',
   PENDING  = 'pending',
   SIGNED   = 'signed',
   REJECTED = 'rejected',
@@ -25,13 +26,16 @@ export class DocumentRecipient {
   document_id: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'director_id' })
-  director: User;
+  @JoinColumn({ name: 'signer_id' })
+  signer: User;
 
   @Column()
-  director_id: string;
+  signer_id: string;
 
-  @Column({ type: 'enum', enum: RecipientStatus, default: RecipientStatus.PENDING })
+  @Column({ default: 1 })
+  step: number;
+
+  @Column({ type: 'enum', enum: RecipientStatus, default: RecipientStatus.WAITING })
   status: RecipientStatus;
 
   @Column({ nullable: true })

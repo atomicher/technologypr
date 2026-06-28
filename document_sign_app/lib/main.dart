@@ -1,22 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart'; // Додано імпорт Firebase
+
+import 'core/services/notification_service.dart'; // Додано імпорт сервісу повідомлень
 import 'core/providers/auth_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/director/director_screen.dart';
-import 'screens/secretary/secretary_screen.dart';
-import 'screens/auth/register_screen.dart';
-import 'screens/admin/admin_screen.dart';
+import 'screens/auth/change_password_screen.dart';
+import 'screens/home/home_screen.dart';
+import 'screens/profile/profile_screen.dart';
 
-void main() {
+// Додано async, оскільки ініціалізація Firebase потребує await
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Ініціалізація Firebase та сповіщень
+  try {
+    await Firebase.initializeApp();
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('Firebase init error: $e');
+  }
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
     ),
   );
+
   runApp(
     MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AuthProvider())],
@@ -37,10 +50,9 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/director': (context) => const DirectorScreen(),
-        '/secretary': (context) => const SecretaryScreen(),
-        '/admin': (context) => const AdminScreen(),
+        '/home': (context) => const HomeScreen(),
+        '/change-password': (context) => const ChangePasswordScreen(),
+        '/profile': (context) => const ProfileScreen(),
       },
     );
   }

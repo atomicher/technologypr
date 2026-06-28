@@ -72,14 +72,8 @@ class ApiClient {
     return http.Response.fromStream(streamed);
   }
 
-  static Future<http.Response> delete(String endpoint) async {
-    final token = await getToken();
-    return http.delete(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-    );
+  static Future<http.Response> delete(String path) async {
+    final headers = await _headers();
+    return http.delete(Uri.parse('$baseUrl$path'), headers: headers);
   }
 }

@@ -13,7 +13,18 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
   Future<bool> login(String email, String password) async {
+    if (email.isEmpty || password.isEmpty) {
+      _error = 'Введіть email та пароль';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -31,24 +42,28 @@ class AuthProvider extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
         return true;
+      } else if (response.statusCode == 401) {
+        _error = 'Невірний email або пароль';
+      } else if (response.statusCode == 404) {
+        _error = 'Користувача не знайдено';
       } else {
         final data = jsonDecode(response.body);
         _error = data['message'] ?? 'Помилка входу';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
     } catch (e) {
-      _error = 'Помилка підключення до сервера';
-      _isLoading = false;
-      notifyListeners();
-      return false;
+      _error =
+          'Не вдалось підключитись до сервера.\nПеревірте інтернет з\'єднання.';
     }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<void> logout() async {
     await ApiClient.deleteToken();
     _user = null;
+    _error = null;
     notifyListeners();
   }
 

@@ -304,7 +304,7 @@ class _DirectorScreenState extends State<DirectorScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 260,
+            expandedHeight: 210,
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF1D4ED8),

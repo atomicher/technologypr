@@ -1,24 +1,29 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne,
-  OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn, 
+  OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Signature } from '../../signatures/entities/signature.entity';
 import { DocumentRecipient } from './document-recipient.entity';
+
 export enum DocumentStatus {
   DRAFT    = 'draft',
   PENDING  = 'pending',
-  REVIEW   = 'review',
   SIGNED   = 'signed',
   REJECTED = 'rejected',
 }
 
 export enum DocumentCategory {
-  ACCOUNTING = 'accounting',
-  LEGAL      = 'legal',
-  INTERNAL   = 'internal',
-  FINANCIAL  = 'financial',
-  OTHER      = 'other',
+  ACCOUNTING  = 'accounting',
+  LEGAL       = 'legal',
+  INTERNAL    = 'internal',
+  FINANCIAL   = 'financial',
+  HR          = 'hr',
+  CONTRACTS   = 'contracts',
+  REPORTS     = 'reports',
+  INVOICES    = 'invoices',
+  ORDERS      = 'orders',
+  OTHER       = 'other',
 }
 
 export enum Priority {
@@ -50,7 +55,7 @@ export class Document {
   @Column({ type: 'enum', enum: DocumentCategory, default: DocumentCategory.OTHER })
   category: DocumentCategory;
 
-  @Column({ type: 'enum', enum: DocumentStatus, default: DocumentStatus.DRAFT })
+  @Column({ type: 'enum', enum: DocumentStatus, default: DocumentStatus.PENDING })
   status: DocumentStatus;
 
   @Column({ type: 'enum', enum: Priority, default: Priority.NORMAL })
@@ -66,23 +71,18 @@ export class Document {
   @Column()
   created_by: string;
 
-  @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'reviewed_by' })
-  reviewedBy: User;
-
-  @Column({ nullable: true })
-  reviewed_by: string;
-
   @Column({ nullable: true })
   rejectionReason: string;
 
   @OneToMany(() => Signature, (sig) => sig.document)
   signatures: Signature[];
 
+  @OneToMany(() => DocumentRecipient, (r) => r.document)
+  recipients: DocumentRecipient[];
+
   @Column({ nullable: true })
   signedAt: Date;
-@OneToMany(() => DocumentRecipient, (r) => r.document)
-recipients: DocumentRecipient[];
+
   @CreateDateColumn()
   createdAt: Date;
 
